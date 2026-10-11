@@ -1,10 +1,1 @@
-#ifndef RR_NEW_H
-#define RR_NEW_H
-
-#include <stddef.h>
-inline void *operator new(size_t, void *p) { return p; }
-inline void *operator new[](size_t, void *p) { return p; }
-inline void operator delete(void *, void *) {}
-inline void operator delete[](void *, void *) {}
-
-#endif //RR_NEW_H
+I2lmbmRlZiBSUl9ORVdfSAojZGVmaW5lIFJSX05FV19ICgovLyBQbGFjZW1lbnQgbmV3L2RlbGV0ZSBhcmUgc3RhbmRhcmQgQysrIChwcm92aWRlZCBieSA8bmV3PikuCi8vIFRoZSBtYW51YWwgZGVmaW5pdGlvbnMgYmVsb3cgd2VyZSBmb3IgYW5jaWVudCBjb21waWxlcnMgYW5kCi8vIGNvbmZsaWN0IHdpdGggbW9kZXJuIHN0YW5kYXJkIGxpYnJhcmllcywgc28gdXNlIHRoZSByZWFsIGhlYWRlci4KI2luY2x1ZGUgPG5ldz4KCiNlbmRpZiAvL1JSX05FV19ICg==
