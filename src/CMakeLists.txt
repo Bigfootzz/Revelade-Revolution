@@ -10,7 +10,7 @@ option(BUILD_CC "Build the camera controller" 0)
 option(BUILD_SERVER "Build the server" 1)
 
 message(STATUS "Detecting LuaJIT...")
-if(NOT ${BUILD_TARGET_WINDOWS} AND PKG_CONFIG_FOUND)
+if(NOT BUILD_TARGET_WINDOWS AND PKG_CONFIG_FOUND)
     message(STATUS "Using pkg-config to detect LuaJIT...")
     pkg_check_modules(LUAJIT QUIET luajit)
     if(LUAJIT_FOUND)
