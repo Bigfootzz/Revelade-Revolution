@@ -70,15 +70,15 @@ int wgw = 0, wgh = 0;
 
 void addwaterglow()
 {
-    //if (!waterglow.initialized) waterglow.setup(screen->w, screen->h);
+    //if (!waterglow.initialized) waterglow.setup(scr_w, scr_h);
     //else waterglow.cleanup();
 
-    if(!wgtex || wgw != screen->w || wgh != screen->h)
+    if(!wgtex || wgw != scr_w || wgh != scr_h)
     {
         if(!wgtex) glGenTextures(1, &wgtex);
-        wgw = screen->w;
-        wgh = screen->h;
-        createtexture(wgtex, screen->w, screen->h, NULL, 3, 0, GL_RGB, GL_TEXTURE_RECTANGLE_ARB);
+        wgw = scr_w;
+        wgh = scr_h;
+        createtexture(wgtex, scr_w, scr_h, NULL, 3, 0, GL_RGB, GL_TEXTURE_RECTANGLE_ARB);
     }
 
     //glEnable(GL_BLEND);
@@ -89,7 +89,7 @@ void addwaterglow()
     //glEnable(GL_TEXTURE_RECTANGLE_ARB);
 
     glBindTexture(GL_TEXTURE_RECTANGLE_ARB, wgtex);
-    glCopyTexSubImage2D(GL_TEXTURE_RECTANGLE_ARB, 0, 0, 0, 0, 0, screen->w, screen->h);
+    glCopyTexSubImage2D(GL_TEXTURE_RECTANGLE_ARB, 0, 0, 0, 0, 0, scr_w, scr_h);
 
     if(hasFBO)
     {
@@ -136,12 +136,12 @@ void addwaterglow()
     //glDisable(GL_BLEND);
 
     //glBindTexture(GL_TEXTURE_RECTANGLE_ARB, wgtex);
-    //glCopyTexSubImage2D(GL_TEXTURE_RECTANGLE_ARB, 0, 0, 0, 0, 0, screen->w, screen->h);
+    //glCopyTexSubImage2D(GL_TEXTURE_RECTANGLE_ARB, 0, 0, 0, 0, 0, scr_w, scr_h);
 
     defaultshader->set();
 
 
     //glDeleteTextures(1, &wgtex);
 
-    //waterglow.render(screen->w, screen->h, 0, 0.f);
+    //waterglow.render(scr_w, scr_h, 0, 0.f);
 }

@@ -282,7 +282,7 @@ ICOMMAND(searcheditbinds, "ss", (char *action, char *cap), searchbinds(action, k
 void inputcommand(char *init, char *action = NULL, char *prompt = NULL, char *flags = NULL) // turns input to the command line on or off
 {
     commandmillis = init ? totalmillis : -1;
-    SDL_EnableUNICODE(commandmillis >= 0 ? 1 : 0);
+    // SDL2: Unicode always enabled via SDL_TEXTINPUT; no API needed
     if(!editmode) keyrepeat(commandmillis >= 0);
     copystring(commandbuf, init ? init : "");
     DELETEA(commandaction);
@@ -345,13 +345,12 @@ void pasteconsole()
     commandbuf[commandlen + decoded] = '\0';
     free(cb);
 #else
-    SDL_SysWMinfo wminfo;
-    SDL_VERSION(&wminfo.version); 
-    wminfo.subsystem = SDL_SYSWM_X11;
-    if(!SDL_GetWMInfo(&wminfo)) return;
-    int cbsize;
-    uchar *cb = (uchar *)XFetchBytes(wminfo.info.x11.display, &cbsize);
-    if(!cb || cbsize <= 0) return;
+    // SDL2: use cross-platform clipboard API
+    char *clipboard = SDL_GetClipboardText();
+    if(!clipboard || !clipboard[0]) { if(clipboard) SDL_free(clipboard); return; }
+    size_t cbsize = strlen(clipboard);
+    uchar *cb = (uchar *)clipboard;
+    if(cbsize <= 0) { SDL_free(clipboard); return; }
     size_t commandlen = strlen(commandbuf);
     for(uchar *cbline = cb, *cbend; commandlen + 1 < sizeof(commandbuf) && cbline < &cb[cbsize]; cbline = cbend + 1)
     {
@@ -370,7 +369,7 @@ void pasteconsole()
         if(commandlen + 1 < sizeof(commandbuf) && cbend < &cb[cbsize]) ++commandlen;
         commandbuf[commandlen] = '\0';
     }
-    XFree(cb);
+    SDL_free(clipboard);
 #endif
 }
 

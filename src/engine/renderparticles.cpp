@@ -970,7 +970,7 @@ void renderparticles(bool mainpass)
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
         glLoadIdentity();
-        glOrtho(0, FONTH*n*2*screen->w/float(screen->h), FONTH*n*2, 0, -1, 1); //squeeze into top-left corner
+        glOrtho(0, FONTH*n*2*scr_w/float(scr_h), FONTH*n*2, 0, -1, 1); //squeeze into top-left corner
         glMatrixMode(GL_MODELVIEW);
         glPushMatrix();
         glLoadIdentity();

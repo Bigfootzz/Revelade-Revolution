@@ -1860,7 +1860,7 @@ void drawminimap()
 
     renderprogress(0, "generating mini-map...", 0, !renderedframe);
 
-    int size = 1<<minimapsize, sizelimit = min(hwtexsize, min(screen->w, screen->h));
+    int size = 1<<minimapsize, sizelimit = min(hwtexsize, min(scr_w, scr_h));
     while(size > sizelimit) size /= 2;
     if(!minimaptex) glGenTextures(1, &minimaptex);
 
@@ -1958,7 +1958,7 @@ void drawminimap()
     glDisable(GL_CULL_FACE);
     glDisable(GL_FOG);
 
-    glViewport(0, 0, screen->w, screen->h);
+    glViewport(0, 0, scr_w, scr_h);
 
     camera1 = oldcamera;
     envmapping = minimapping = false;
@@ -2024,7 +2024,7 @@ FVARP(motionblurscale, 0, 0.5f, 1);
 
 void addmotionblur()
 {
-    if(!(motionblur || camera1->quake) || !hasTR || max(screen->w, screen->h) > hwtexsize)
+    if(!(motionblur || camera1->quake) || !hasTR || max(scr_w, scr_h) > hwtexsize)
     {
         lastquake = camera1->quake!=0;
         return;
@@ -2032,11 +2032,11 @@ void addmotionblur()
 
     if(game::ispaused()) { lastmotion = 0; return; }
 
-    if(!motiontex || motionw != screen->w || motionh != screen->h)
+    if(!motiontex || motionw != scr_w || motionh != scr_h)
     {
         if(!motiontex) glGenTextures(1, &motiontex);
-        motionw = screen->w;
-        motionh = screen->h;
+        motionw = scr_w;
+        motionh = scr_h;
         lastmotion = 0;
         createtexture(motiontex, motionw, motionh, NULL, 3, 0, GL_RGB, GL_TEXTURE_RECTANGLE_ARB);
     }
@@ -2082,7 +2082,7 @@ void addmotionblur()
     {
         lastmotion = lastmillis - lastmillis%motionblurmillis;
 
-        glCopyTexSubImage2D(GL_TEXTURE_RECTANGLE_ARB, 0, 0, 0, 0, 0, screen->w, screen->h);
+        glCopyTexSubImage2D(GL_TEXTURE_RECTANGLE_ARB, 0, 0, 0, 0, 0, scr_w, scr_h);
     }
 
     lastquake = camera1->quake!=0;
@@ -2302,11 +2302,11 @@ void gl_drawframe(int w, int h)
 {
     if(pan == 1) return gl_drawframe_real(w, h);
 
-    if(panw!=screen->w || panh!=screen->h)
+    if(panw!=scr_w || panh!=scr_h)
     {
         loopk(4) if(pantex[k]) { glDeleteTextures(1, &pantex[k]); pantex[k] = 0; }
-        panw = screen->w;
-        panh = screen->h;
+        panw = scr_w;
+        panh = scr_h;
     }
 
     //TODO: math
@@ -2318,14 +2318,14 @@ void gl_drawframe(int w, int h)
         findorientation();
         //if(frames>2) 
         {
-            gl_drawframe_real(screen->w, screen->h);
+            gl_drawframe_real(scr_w, scr_h);
             if(!pantex[k]) 
             {
                 glGenTextures(1, &pantex[k]);
-                createtexture(pantex[k], screen->w, screen->h, NULL, 3, false);
+                createtexture(pantex[k], scr_w, scr_h, NULL, 3, false);
             }
             glBindTexture(GL_TEXTURE_2D, pantex[k]);
-            glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, screen->w, screen->h);
+            glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, scr_w, scr_h);
         }
         camera1->yaw += 90;
     }
@@ -2349,9 +2349,9 @@ void gl_drawframe(int w, int h)
     {
         glBindTexture(GL_TEXTURE_2D, pantex[k]);
         glBegin(GL_QUAD_STRIP);
-        loopi(screen->w/pan+1)
+        loopi(scr_w/pan+1)
         {
-            float offset = float(i)/(screen->w/pan), 
+            float offset = float(i)/(scr_w/pan), 
                     u = 0.5f + 0.5f*tanf(-M_PI/4 + offset*M_PI/2),
                     y = sqrtf((-1 + u*2)*(-1 + u*2) + 1), 
                     x = -1 + 2 * (offset + k)/pan;

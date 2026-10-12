@@ -16,7 +16,9 @@ extern "C"
 #include "SDL_events.h"
 #include "SDL.h"
 
+#ifdef RR_USE_CV
 #include "../controller-camera/ipc.h"
+#endif
 
 
 namespace input

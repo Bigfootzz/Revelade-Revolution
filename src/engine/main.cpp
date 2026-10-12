@@ -19,7 +19,7 @@ void cleanup()
     extern void stopLocalServer(); stopLocalServer();
     cleanupserver();
     SDL_ShowCursor(1);
-    SDL_WM_GrabInput(SDL_GRAB_OFF);
+    if(screen) SDL_SetWindowGrab(screen, SDL_FALSE);
     cleargamma();
     freeocta(worldroot);
     extern void clear_command(); clear_command();
@@ -57,7 +57,7 @@ void fatal(const char *s, ...)    // failure exit
             if(SDL_WasInit(SDL_INIT_VIDEO))
             {
                 SDL_ShowCursor(1);
-                SDL_WM_GrabInput(SDL_GRAB_OFF);
+                if(screen) SDL_SetWindowGrab(screen, SDL_FALSE);
                 cleargamma();
             }
             #ifdef WIN32
@@ -72,7 +72,9 @@ void fatal(const char *s, ...)    // failure exit
     exit(EXIT_FAILURE);
 }
 
-SDL_Surface *screen = NULL;
+SDL_Window *screen = NULL;
+SDL_GLContext glcontext = NULL;
+static bool screen_fullscreen = false;
 
 int curtime = 0, lastmillis = 1, elapsedtime = 0, totalmillis = 1;
 
@@ -162,7 +164,7 @@ void renderbackground(const char *caption, Texture *mapshot, Texture *bgshot, co
 
     stopsounds(); // stop sounds while loading
  
-    int w = screen->w, h = screen->h;
+    int w = scr_w, h = scr_h;
     if(forceaspect) w = int(ceil(h*forceaspect));
     getbackgroundres(w, h);
     gettextres(w, h);
@@ -261,7 +263,7 @@ void renderbackground(const char *caption, Texture *mapshot, Texture *bgshot, co
         glEnd();
         float lh = 0.5f*min(w, h), lw = lh*2,
               lx = 0.5f*(w - lw), ly = 0.5f*(h*0.5f - lh);
-        settexture((maxtexsize ? min(maxtexsize, hwtexsize) : hwtexsize) >= 1024 && (screen->w > 1280 || screen->h > 800) ? "data/gui/logo_1024.png" : "data/gui/logo.png", 3);
+        settexture((maxtexsize ? min(maxtexsize, hwtexsize) : hwtexsize) >= 1024 && (scr_w > 1280 || scr_h > 800) ? "data/gui/logo_1024.png" : "data/gui/logo.png", 3);
         glColor4f(1, 1, 1, 1);
         glBegin(GL_TRIANGLE_STRIP);
         glTexCoord2f(0, 0); glVertex2f(lx,    ly);
@@ -385,7 +387,7 @@ void renderprogress(float bar, const char *text, GLuint tex, bool background)   
     extern int sdl_backingstore_bug;
     if(background || sdl_backingstore_bug > 0) restorebackground();
 
-    int w = screen->w, h = screen->h;
+    int w = scr_w, h = scr_h;
     if(forceaspect) w = int(ceil(h*forceaspect));
     getbackgroundres(w, h);
     gettextres(w, h);
@@ -494,8 +496,7 @@ void renderprogress(float bar, const char *text, GLuint tex, bool background)   
 
 void keyrepeat(bool on)
 {
-    SDL_EnableKeyRepeat(on ? SDL_DEFAULT_REPEAT_DELAY : 0,
-                             SDL_DEFAULT_REPEAT_INTERVAL);
+    // SDL2: key repeat is always enabled via SDL_KEYDOWN events with repeat flag; no API needed
 }
 
 bool grabinput = false, minimized = false;
@@ -503,10 +504,10 @@ bool grabinput = false, minimized = false;
 void inputgrab(bool on)
 {
 #ifndef WIN32
-    if(!(screen->flags & SDL_FULLSCREEN)) SDL_WM_GrabInput(SDL_GRAB_OFF);
+    if(!screen_fullscreen) SDL_SetWindowGrab(screen, SDL_FALSE);
     else
 #endif
-    SDL_WM_GrabInput(on ? SDL_GRAB_ON : SDL_GRAB_OFF);
+    if(screen) SDL_SetWindowGrab(screen, on ? SDL_TRUE : SDL_FALSE);
     SDL_ShowCursor(on ? SDL_DISABLE : SDL_ENABLE);
 }
 
@@ -516,9 +517,10 @@ void setfullscreen(bool enable)
 #if defined(WIN32) || defined(__APPLE__)
     initwarning(enable ? "fullscreen" : "windowed");
 #else
-    if(enable == !(screen->flags&SDL_FULLSCREEN))
+    if(enable != screen_fullscreen)
     {
-        SDL_WM_ToggleFullScreen(screen);
+        SDL_SetWindowFullscreen(screen, enable ? SDL_WINDOW_FULLSCREEN : 0);
+        screen_fullscreen = enable;
         inputgrab(grabinput);
     }
 #endif
@@ -543,11 +545,9 @@ void screenres(int *w, int *h)
 #else
         return;
     }
-    SDL_Surface *surf = SDL_SetVideoMode(clamp(*w, SCR_MINW, SCR_MAXW), clamp(*h, SCR_MINH, SCR_MAXH), 0, SDL_OPENGL|(screen->flags&SDL_FULLSCREEN ? SDL_FULLSCREEN : SDL_RESIZABLE));
-    if(!surf) return;
-    screen = surf;
-    scr_w = screen->w;
-    scr_h = screen->h;
+    if(!screen) return;
+    SDL_SetWindowSize(screen, clamp(*w, SCR_MINW, SCR_MAXW), clamp(*h, SCR_MINH, SCR_MAXH));
+    SDL_GetWindowSize(screen, &scr_w, &scr_h);
     glViewport(0, 0, scr_w, scr_h);
 #endif
 }
@@ -560,20 +560,17 @@ VARFP(gamma, 30, 100, 300,
     if(gamma == curgamma) return;
     curgamma = gamma;
 	float f = gamma/100.0f;
-    if(SDL_SetGamma(f,f,f)==-1) conoutf(CON_ERROR, "Could not set gamma: %s", SDL_GetError());
+    { /* SDL2: SDL_SetGamma removed; gamma adjustment not supported */ }
 });
 
 void restoregamma()
 {
-    if(curgamma == 100) return;
-    float f = curgamma/100.0f;
-    SDL_SetGamma(1, 1, 1);
-    SDL_SetGamma(f, f, f);
+    // SDL2: SDL_SetGamma removed; no-op
 }
 
 void cleargamma()
 {
-    if(curgamma != 100) SDL_SetGamma(1, 1, 1);
+    // SDL2: SDL_SetGamma removed; no-op
 }
 
 VAR(dbgmodes, 0, 0, 1);
@@ -582,30 +579,41 @@ int desktopw = 0, desktoph = 0;
 
 void setupscreen(int &usedcolorbits, int &useddepthbits, int &usedfsaa)
 {
-    int flags = SDL_RESIZABLE;
+    Uint32 winflags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
     #if defined(WIN32) || defined(__APPLE__)
-    flags = 0;
+    winflags = SDL_WINDOW_OPENGL;
     #endif
-    if(fullscreen) flags = SDL_FULLSCREEN;
-    SDL_Rect **modes = SDL_ListModes(NULL, SDL_OPENGL|flags);
-    if(modes && modes!=(SDL_Rect **)-1)
+    if(fullscreen) winflags |= SDL_WINDOW_FULLSCREEN;
+    screen_fullscreen = fullscreen;
+    int nummodes = SDL_GetNumDisplayModes(0);
+    if(nummodes > 0)
     {
         int widest = -1, best = -1;
-        for(int i = 0; modes[i]; i++)
+        SDL_DisplayMode mwidest, mbest;
+        memset(&mwidest, 0, sizeof(mwidest));
+        memset(&mbest, 0, sizeof(mbest));
+        for(int i = 0; i < nummodes; i++)
         {
-            if(dbgmodes) conoutf(CON_DEBUG, "mode[%d]: %d x %d", i, modes[i]->w, modes[i]->h);
-            if(widest < 0 || modes[i]->w > modes[widest]->w || (modes[i]->w == modes[widest]->w && modes[i]->h > modes[widest]->h))
-                widest = i;
+            SDL_DisplayMode dm;
+            if(SDL_GetDisplayMode(0, i, &dm) != 0) continue;
+            if(dbgmodes) conoutf(CON_DEBUG, "mode[%d]: %d x %d", i, dm.w, dm.h);
+            if(widest < 0 || dm.w > mwidest.w || (dm.w == mwidest.w && dm.h > mwidest.h))
+                { widest = i; mwidest = dm; }
         }
         if(scr_w < 0 || scr_h < 0)
         {
             int w = scr_w, h = scr_h, ratiow = desktopw, ratioh = desktoph;
             if(w < 0 && h < 0) { w = SCR_DEFAULTW; h = SCR_DEFAULTH; }
-            if(ratiow <= 0 || ratioh <= 0) { ratiow = modes[widest]->w; ratioh = modes[widest]->h; }
-            for(int i = 0; modes[i]; i++) if(modes[i]->w*ratioh == modes[i]->h*ratiow)
+            if(ratiow <= 0 || ratioh <= 0) { ratiow = mwidest.w; ratioh = mwidest.h; }
+            for(int i = 0; i < nummodes; i++)
             {
-                if(w <= modes[i]->w && h <= modes[i]->h && (best < 0 || modes[i]->w < modes[best]->w))
-                    best = i;
+                SDL_DisplayMode dm;
+                if(SDL_GetDisplayMode(0, i, &dm) != 0) continue;
+                if(dm.w*ratioh == dm.h*ratiow)
+                {
+                    if(w <= dm.w && h <= dm.h && (best < 0 || dm.w < mbest.w))
+                        { best = i; mbest = dm; }
+                }
             }
         }
         if(best < 0)
@@ -614,22 +622,24 @@ void setupscreen(int &usedcolorbits, int &useddepthbits, int &usedfsaa)
             if(w < 0 && h < 0) { w = SCR_DEFAULTW; h = SCR_DEFAULTH; }
             else if(w < 0) w = (h*SCR_DEFAULTW)/SCR_DEFAULTH;
             else if(h < 0) h = (w*SCR_DEFAULTH)/SCR_DEFAULTW;
-            for(int i = 0; modes[i]; i++)
+            for(int i = 0; i < nummodes; i++)
             {
-                if(w <= modes[i]->w && h <= modes[i]->h && (best < 0 || modes[i]->w < modes[best]->w || (modes[i]->w == modes[best]->w && modes[i]->h < modes[best]->h)))
-                    best = i;
+                SDL_DisplayMode dm;
+                if(SDL_GetDisplayMode(0, i, &dm) != 0) continue;
+                if(w <= dm.w && h <= dm.h && (best < 0 || dm.w < mbest.w || (dm.w == mbest.w && dm.h < mbest.h)))
+                    { best = i; mbest = dm; }
             }
         }
-        if(flags&SDL_FULLSCREEN)
+        if(winflags&SDL_WINDOW_FULLSCREEN)
         {
-            if(best >= 0) { scr_w = modes[best]->w; scr_h = modes[best]->h; }
+            if(best >= 0) { scr_w = mbest.w; scr_h = mbest.h; }
             else if(desktopw > 0 && desktoph > 0) { scr_w = desktopw; scr_h = desktoph; }
-            else if(widest >= 0) { scr_w = modes[widest]->w; scr_h = modes[widest]->h; }
+            else if(widest >= 0) { scr_w = mwidest.w; scr_h = mwidest.h; }
         }
         else if(best < 0)
         {
-            scr_w = min(scr_w >= 0 ? scr_w : (scr_h >= 0 ? (scr_h*SCR_DEFAULTW)/SCR_DEFAULTH : SCR_DEFAULTW), (int)modes[widest]->w);
-            scr_h = min(scr_h >= 0 ? scr_h : (scr_w >= 0 ? (scr_w*SCR_DEFAULTH)/SCR_DEFAULTW : SCR_DEFAULTH), (int)modes[widest]->h);
+            scr_w = min(scr_w >= 0 ? scr_w : (scr_h >= 0 ? (scr_h*SCR_DEFAULTW)/SCR_DEFAULTH : SCR_DEFAULTW), mwidest.w);
+            scr_h = min(scr_h >= 0 ? scr_h : (scr_w >= 0 ? (scr_w*SCR_DEFAULTH)/SCR_DEFAULTW : SCR_DEFAULTH), mwidest.h);
         }
         if(dbgmodes) conoutf(CON_DEBUG, "selected %d x %d", scr_w, scr_h);
     }
@@ -638,13 +648,10 @@ void setupscreen(int &usedcolorbits, int &useddepthbits, int &usedfsaa)
     else if(scr_h < 0) scr_h = (scr_w*SCR_DEFAULTH)/SCR_DEFAULTW;
 
     bool hasbpp = true;
-    if(colorbits)
-        hasbpp = SDL_VideoModeOK(scr_w, scr_h, colorbits, SDL_OPENGL|flags)==colorbits;
+    // SDL2: no SDL_VideoModeOK equivalent; attempt creation and fall back on failure
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-#if SDL_VERSION_ATLEAST(1, 2, 11)
-    if(vsync>=0) SDL_GL_SetAttribute(SDL_GL_SWAP_CONTROL, vsync);
-#endif
+    // SDL2: vsync via SDL_GL_SetSwapInterval after context creation
     static int configs[] =
     {
         0x7, /* try everything */
@@ -678,10 +685,17 @@ void setupscreen(int &usedcolorbits, int &useddepthbits, int &usedfsaa)
             SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, config&4 ? 1 : 0);
             SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, config&4 ? fsaa : 0);
         }
-        screen = SDL_SetVideoMode(scr_w, scr_h, hasbpp ? colorbits : 0, SDL_OPENGL|flags);
-        if(screen) break;
+        if(screen) { SDL_DestroyWindow(screen); screen = NULL; }
+        if(glcontext) { SDL_GL_DeleteContext(glcontext); glcontext = NULL; }
+        screen = SDL_CreateWindow("Revelade Revolution", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, scr_w, scr_h, winflags);
+        if(screen)
+        {
+            glcontext = SDL_GL_CreateContext(screen);
+            if(!glcontext) { SDL_DestroyWindow(screen); screen = NULL; }
+        }
+        if(screen && glcontext) break;
     }
-    if(!screen) fatal("Unable to create OpenGL screen: %s", SDL_GetError());
+    if(!screen || !glcontext) fatal("Unable to create OpenGL screen: %s", SDL_GetError());
     else
     {
         if(!hasbpp) conoutf(CON_WARN, "%d bit color buffer not supported - disabling", colorbits);
@@ -690,13 +704,15 @@ void setupscreen(int &usedcolorbits, int &useddepthbits, int &usedfsaa)
         if(fsaa>0 && (config&4)==0) conoutf(CON_WARN, "%dx anti-aliasing not supported - disabling", fsaa);
     }
 
-    scr_w = screen->w;
-    scr_h = screen->h;
+    SDL_GetWindowSize(screen, &scr_w, &scr_h);
+
+    if(vsync>=0) SDL_GL_SetSwapInterval(vsync);
 
     usedcolorbits = hasbpp ? colorbits : 0;
     useddepthbits = config&1 ? depthbits : 0;
     usedfsaa = config&4 ? fsaa : 0;
 }
+
 
 void resetgl()
 {
@@ -731,8 +747,6 @@ void resetgl()
     cleanupdepthfx();
     cleanupshaders();
     cleanupgl();
-
-    SDL_SetVideoMode(0, 0, 0, 0);
 
     int usedcolorbits = 0, useddepthbits = 0, usedfsaa = 0;
     setupscreen(usedcolorbits, useddepthbits, usedfsaa);
@@ -777,9 +791,11 @@ static bool filterevent(const SDL_Event &event)
     {
         case SDL_MOUSEMOTION:
             #ifndef WIN32
-            if(grabinput && !(screen->flags&SDL_FULLSCREEN))
+            if(grabinput && !screen_fullscreen)
             {
-                if(event.motion.x == screen->w / 2 && event.motion.y == screen->h / 2) 
+                int ww = 0, hh = 0;
+                if(screen) SDL_GetWindowSize(screen, &ww, &hh);
+                if(event.motion.x == ww / 2 && event.motion.y == hh / 2) 
                     return false;  // ignore any motion events generated by SDL_WarpMouse
                 #ifdef __APPLE__
                 if(event.motion.y == 0) 
@@ -826,15 +842,17 @@ static void ignoremousemotion()
 {
     SDL_Event e;
     SDL_PumpEvents();
-    while(SDL_PeepEvents(&e, 1, SDL_GETEVENT, SDL_EVENTMASK(SDL_MOUSEMOTION)));
+    while(SDL_PeepEvents(&e, 1, SDL_GETEVENT, SDL_MOUSEMOTION, SDL_MOUSEMOTION) > 0);
 }
 
 static void resetmousemotion()
 {
 #ifndef WIN32
-    if(grabinput && !(screen->flags&SDL_FULLSCREEN))
+    if(grabinput && !screen_fullscreen && screen)
     {
-        SDL_WarpMouse(screen->w / 2, screen->h / 2);
+        int ww = 0, hh = 0;
+        SDL_GetWindowSize(screen, &ww, &hh);
+        SDL_WarpMouseInWindow(screen, ww / 2, hh / 2);
     }
 #endif
 }
@@ -881,23 +899,45 @@ void checkinput()
                 quit();
                 return;
 
-            #if !defined(WIN32) && !defined(__APPLE__)
-            case SDL_VIDEORESIZE:
-                screenres(&event.resize.w, &event.resize.h);
+            case SDL_WINDOWEVENT:
+                #if !defined(WIN32) && !defined(__APPLE__)
+                if(event.window.event == SDL_WINDOWEVENT_RESIZED)
+                {
+                    screenres(&event.window.data1, &event.window.data2);
+                }
+                #endif
+                if(event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)
+                    inputgrab(grabinput = true);
+                else if(event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+                    inputgrab(grabinput = false);
+                else if(event.window.event == SDL_WINDOWEVENT_MINIMIZED)
+                    minimized = true;
+                else if(event.window.event == SDL_WINDOWEVENT_RESTORED)
+                    minimized = false;
                 break;
-            #endif
 
             case SDL_KEYDOWN:
             case SDL_KEYUP:
-                keypress(event.key.keysym.sym, event.key.state==SDL_PRESSED, uni2cube(event.key.keysym.unicode));
+                keypress(event.key.keysym.sym, event.key.state==SDL_PRESSED, 0);
                 break;
 
-            case SDL_ACTIVEEVENT:
-                if(event.active.state & SDL_APPINPUTFOCUS)
-                    inputgrab(grabinput = event.active.gain!=0);
-                if(event.active.state & SDL_APPACTIVE)
-                    minimized = !event.active.gain;
+            case SDL_TEXTINPUT:
+            {
+                // SDL2: decode UTF-8 text input to Unicode codepoints
+                const char *t = event.text.text;
+                while(*t)
+                {
+                    int uni = 0;
+                    unsigned char c = (unsigned char)*t;
+                    if(c < 0x80) { uni = c; t += 1; }
+                    else if((c & 0xE0) == 0xC0) { uni = ((c & 0x1F) << 6) | (t[1] & 0x3F); t += 2; }
+                    else if((c & 0xF0) == 0xE0) { uni = ((c & 0x0F) << 12) | ((t[1] & 0x3F) << 6) | (t[2] & 0x3F); t += 3; }
+                    else { t += 1; continue; }
+                    keypress(-1, true, uni2cube(uni));
+                    keypress(-1, false, 0);
+                }
                 break;
+            }
 
             case SDL_MOUSEMOTION:
                 if(grabinput)
@@ -926,7 +966,7 @@ void checkinput()
 void swapbuffers(bool overlay)
 {
     recorder::capture(overlay);
-    SDL_GL_SwapBuffers();
+    SDL_GL_SwapWindow(screen);
 }
  
 VAR(menufps, 0, 60, 1000);
@@ -1225,6 +1265,7 @@ int main(int argc, char **argv)
     #endif
 
     if(SDL_Init(SDL_INIT_TIMER|SDL_INIT_VIDEO|SDL_INIT_AUDIO|par)<0) fatal("Unable to initialize SDL: %s", SDL_GetError());
+    SDL_StartTextInput();
 
     INIT_LOG("net");
     if(enet_initialize()<0) fatal("Unable to initialise network module");
@@ -1239,11 +1280,11 @@ int main(int argc, char **argv)
     input::init();
 
     INIT_LOG("video: mode");
-    const SDL_VideoInfo *video = SDL_GetVideoInfo();
-    if(video)
+    SDL_DisplayMode dm;
+    if(SDL_GetDesktopDisplayMode(0, &dm) == 0)
     {
-        desktopw = video->current_w;
-        desktoph = video->current_h;
+        desktopw = dm.w;
+        desktoph = dm.h;
     }
     int usedcolorbits = 0, useddepthbits = 0, usedfsaa = 0;
     setupscreen(usedcolorbits, useddepthbits, usedfsaa);
@@ -1252,7 +1293,7 @@ int main(int argc, char **argv)
 
     defformatstring(windowtitle)("Revelade Revolution %s", version::getVersionString());
 
-    SDL_WM_SetCaption(windowtitle, NULL);
+    if(screen) SDL_SetWindowTitle(screen, windowtitle);
     keyrepeat(false);
     SDL_ShowCursor(0);
 
@@ -1375,8 +1416,8 @@ int main(int argc, char **argv)
         if(minimized) continue;
 
         inbetweenframes = false;
-        if(mainmenu) gl_drawmainmenu(screen->w, screen->h);
-        else gl_drawframe(screen->w, screen->h);
+        if(mainmenu) gl_drawmainmenu(scr_w, scr_h);
+        else gl_drawframe(scr_w, scr_h);
         swapbuffers();
         renderedframe = inbetweenframes = true;
     }
