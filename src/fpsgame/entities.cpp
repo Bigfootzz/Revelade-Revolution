@@ -66,7 +66,7 @@ namespace entities
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
             "gamemodels/ammo/ammo_lv1", "gamemodels/ammo/ammo_lv2", "gamemodels/ammo/ammo_lv3", "gamemodels/ammo/ammo_lv4",
             "gamemodels/health", "gamemodels/health", "gamemodels/health", "gamemodels/ammo/mortar",
-            "gamemodels/armor/green", "gamemodels/armor/yellow", "gamemodels/quad", "teleporter",
+            "gamemodels/armor/green", "gamemodels/armor/yellow", "gamemodels/quad", "gamemodels/teleport",
             NULL, NULL,
             "carrot",
             NULL, NULL,
