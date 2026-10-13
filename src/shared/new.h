@@ -1,1 +1,9 @@
-I2lmbmRlZiBSUl9ORVdfSAojZGVmaW5lIFJSX05FV19ICgovLyBQbGFjZW1lbnQgbmV3L2RlbGV0ZSBhcmUgc3RhbmRhcmQgQysrIChwcm92aWRlZCBieSA8bmV3PikuCi8vIFRoZSBtYW51YWwgZGVmaW5pdGlvbnMgYmVsb3cgd2VyZSBmb3IgYW5jaWVudCBjb21waWxlcnMgYW5kCi8vIGNvbmZsaWN0IHdpdGggbW9kZXJuIHN0YW5kYXJkIGxpYnJhcmllcywgc28gdXNlIHRoZSByZWFsIGhlYWRlci4KI2luY2x1ZGUgPG5ldz4KCiNlbmRpZiAvL1JSX05FV19ICg==
+#ifndef RR_NEW_H
+#define RR_NEW_H
+
+// Placement new/delete are standard C++ (provided by <new>).
+// The manual definitions below were for ancient compilers and
+// conflict with modern standard libraries, so use the real header.
+#include <new>
+
+#endif //RR_NEW_H
