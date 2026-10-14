@@ -1225,8 +1225,49 @@ namespace game
         d->totalshots += WEAP(gun,damage)*(d->quadmillis? 4: 1)*(headshot? 1: GUN_HEADSHOT_MUL)*WEAP(gun,numrays);
     }
 
+// dynamic light entities: ET_LIGHT with attr5 bit0 set (never baked into lightmaps)
+// attr5 bits1-2 select the animation style: 0 steady, 1 flicker, 2 pulse
+// (so attr5 = 1 steady, 3 flicker, 5 pulse); animated deterministically from
+// totalmillis plus the entity index, so no networking is needed.
+static void addentdynlights()
+{
+    if(!dynlightents) return;
+    const vector<extentity *> &ents = entities::getents();
+    loopv(ents)
+    {
+        extentity &e = *ents[i];
+        if(e.type!=ET_LIGHT || !(e.attr5&1)) continue;
+        float radius = e.attr1 > 0 ? float(e.attr1) : 200;
+        vec color(e.attr2, e.attr3, e.attr4); color.mul(1.0f/255);
+        float intensity = 1.0f, radscale = 1.0f;
+        switch((e.attr5>>1)&3)
+        {
+            case 1: // flicker: failing fluorescent, mostly bright with occasional dips
+            {
+                int t = totalmillis/90;
+                uint h = uint(t)*2654435761u ^ uint(i)*40503u;
+                float r = float(h%1000)/1000.0f;
+                intensity = 0.85f + 0.15f*r;
+                if((h/1000)%17 == 0) intensity = 0.25f + 0.15f*float(h%500)/500.0f;
+                radscale = 0.85f + 0.15f*intensity;
+                break;
+            }
+            case 2: // pulse: smooth breathing
+            {
+                float s = sinf((totalmillis + i*977)/3000.0f*PI2);
+                intensity = 0.775f + 0.225f*s;
+                radscale = 1.0f + 0.15f*s;
+                break;
+            }
+            default: break; // steady
+        }
+        adddynlight(e.o, radius*radscale, vec(color).mul(intensity));
+    }
+}
+
     void adddynlights()
     {
+        addentdynlights();
         loopv(projs)
         {
             projectile &p = projs[i];

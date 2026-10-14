@@ -378,6 +378,9 @@ extern void drawbb(const ivec &bo, const ivec &br, const vec &camera = camera1->
 
 // dynlight
 
+// dynamic light entity: ET_LIGHT with attr5 bit0 set (never baked into lightmaps)
+static inline bool isdynlight(const extentity &e) { return e.type==ET_LIGHT && (e.attr5&1); }
+
 extern void updatedynlights();
 extern int finddynlights();
 extern void calcdynlightmask(vtxarray *va);

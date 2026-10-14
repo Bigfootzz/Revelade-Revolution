@@ -4,6 +4,7 @@ extern int curtime;                     // current frame time
 extern int lastmillis;                  // last time
 extern int elapsedtime;                 // elapsed frame time
 extern int totalmillis;                 // total elapsed time
+extern int dynlightents;                // register dynamic light entities every frame
 extern uint totalsecs;
 extern int gamespeed, paused;
 extern int physsteps;

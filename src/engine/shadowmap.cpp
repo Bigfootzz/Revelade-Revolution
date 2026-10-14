@@ -54,6 +54,7 @@ void guessshadowdir()
             switch(e.type)
             {
                 case ET_LIGHT:
+                    if(isdynlight(e)) break; // dynamic lights are never baked
                     if(!e.attr1) { lightpos.add(e.o); numlights++; }
                     break;
 

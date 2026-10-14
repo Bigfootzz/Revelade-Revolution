@@ -1187,6 +1187,7 @@ const vector<int> &checklightcache(int x, int y)
 
 static inline void addlight(lightmapworker *w, const extentity &light, int cx, int cy, int cz, int size, const vec *v, const vec *n, int numv)
 {
+    if(isdynlight(light)) return; // dynamic light entities are never baked
     int radius = light.attr1;
     if(radius > 0)
     {
@@ -2748,7 +2749,7 @@ void lightreaching(const vec &target, vec &color, vec &dir, bool fast, extentity
     loopv(lights)
     {
         extentity &e = *ents[lights[i]];
-        if(e.type != ET_LIGHT)
+        if(e.type != ET_LIGHT || isdynlight(e))
             continue;
     
         vec ray(target);
@@ -2814,7 +2815,7 @@ entity *brightestlight(const vec &target, const vec &dir)
     loopv(lights)
     {
         extentity &e = *ents[lights[i]];
-        if(e.type != ET_LIGHT || vec(e.o).sub(target).dot(dir)<0)
+        if(e.type != ET_LIGHT || isdynlight(e) || vec(e.o).sub(target).dot(dir)<0)
             continue;
 
         vec ray(target);

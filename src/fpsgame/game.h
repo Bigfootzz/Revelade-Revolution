@@ -24,7 +24,12 @@ enum
 enum                            // static entity types
 {
     NOTUSED = ET_EMPTY,         // entity slot not in use in map
-    LIGHT = ET_LIGHT,           // lightsource, attr1 = radius, attr2 = intensity
+    LIGHT = ET_LIGHT,           // lightsource, attr1 = radius, attr2/3/4 = R/G/B 0..255
+                               // attr5 bit0 = DYNAMIC light entity: never baked into lightmaps,
+                               //   re-registered every frame as a runtime dynamic light.
+                               // attr5 bits1-2 = animation style: 0 steady, 1 flicker, 2 pulse
+                               //   (so attr5 = 1 steady, 3 flicker, 5 pulse).
+                               // attr1 <= 0 dynamic lights use radius 200.
     MAPMODEL = ET_MAPMODEL,     // attr1 = angle, attr2 = idx
     PLAYERSTART,                // attr1 = angle, attr2 = team
     ENVMAP = ET_ENVMAP,         // attr1 = radius

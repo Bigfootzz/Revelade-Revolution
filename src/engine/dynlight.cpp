@@ -3,6 +3,7 @@
 VARP(ffdynlights, 0, min(5, DYNLIGHTMASK), DYNLIGHTMASK);
 VARP(maxdynlights, 0, min(3, MAXDYNLIGHTS), MAXDYNLIGHTS);
 VARP(dynlightdist, 0, 1024, 10000);
+VARP(dynlightents, 0, 1, 1); // register dynamic light entities (ET_LIGHT attr5 bit0) every frame
 
 struct dynlight
 {
