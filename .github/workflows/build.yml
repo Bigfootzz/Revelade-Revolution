@@ -94,17 +94,12 @@ jobs:
 
       # The repo's CMake never sets SDL_LIBRARIES/SDL_INCLUDE_DIRS on Windows,
       # so inject them via cache vars (same recipe as the local MinGW build).
-      # The vendored src/vcpp/SDL_win32_main.c calls SDL_SetModuleHandle, which
-      # SDL2 >= 2.1 removed; link a documented no-op shim for it.
       - name: Configure
         shell: msys2 {0}
         run: |
-          printf 'void SDL_SetModuleHandle(void *handle) { (void)handle; }\n' > sdl_modulehandle_shim.c
-          gcc -O2 -c sdl_modulehandle_shim.c -o sdl_modulehandle_shim.o
-          ar rcs libsdl_modulehandle_shim.a sdl_modulehandle_shim.o
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SERVER=OFF -G "MinGW Makefiles" \
+                    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SERVER=OFF -G "MinGW Makefiles" \
             -DSDL_INCLUDE_DIRS=/mingw64/include/SDL2 \
-            -DSDL_LIBRARIES="SDL2main;SDL2;$PWD/libsdl_modulehandle_shim.a"
+            -DSDL_LIBRARIES="SDL2main;SDL2"
 
       - name: Build
         shell: msys2 {0}
