@@ -16,7 +16,7 @@ set(RR_VERSION_CLEAN "")
 
 # Detect svn rev
 include(FindSubversion)
-IF(Subversion_FOUND)
+IF(Subversion_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.svn")
     Subversion_WC_INFO(${CMAKE_SOURCE_DIR} MY)
     SET(RR_VERSION_TAG ${MY_WC_REVISION})
 
