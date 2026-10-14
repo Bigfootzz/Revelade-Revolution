@@ -104,7 +104,7 @@ jobs:
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SERVER=OFF -G "MinGW Makefiles" \
             -DSDL_INCLUDE_DIRS=/mingw64/include/SDL2 \
-            -DSDL_LIBRARIES="SDL2main;SDL2"
+            -DSDL_LIBRARIES="SDL2main;SDL2;SDL2_image;SDL2_mixer"
 
       - name: Build
         shell: msys2 {0}
