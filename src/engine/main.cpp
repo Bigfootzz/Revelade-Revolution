@@ -508,6 +508,12 @@ void inputgrab(bool on)
     else
 #endif
     if(screen) SDL_SetWindowGrab(screen, on ? SDL_TRUE : SDL_FALSE);
+    // Relative mouse mode is what actually confines the pointer so motion
+    // deltas keep flowing past the screen edge; SDL_SetWindowGrab alone does
+    // not confine the cursor in SDL2. Without this, mouse look stalls when
+    // the pointer reaches the edge of the screen (~180 degrees of yaw).
+    if(SDL_SetRelativeMouseMode(on ? SDL_TRUE : SDL_FALSE) < 0)
+        conoutf(CON_WARN, "failed to %s relative mouse mode: %s", on ? "enable" : "disable", SDL_GetError());
     SDL_ShowCursor(on ? SDL_DISABLE : SDL_ENABLE);
 }
 
