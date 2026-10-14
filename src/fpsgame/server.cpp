@@ -394,6 +394,8 @@ namespace server
         extern void removeai(clientinfo *ci);
         extern void clearai();
         extern void resetai();
+        extern void scheduleresetai();
+        extern void doresetai();
         extern void checkai();
         extern void reqadd(clientinfo *ci, ai::AiType type, int skill);
         extern void reqdel(clientinfo *ci, ai::AiType type);
@@ -2545,6 +2547,7 @@ namespace server
             else if(!m_timed || gamemillis < gamelimit)
             {
                 processevents();
+                aiman::doresetai(); // apply any AI reset deferred from inside event processing
                 if(curtime)
                 {
                     loopv(sents) if(sents[i].spawntime) // spawn entities when timer reached

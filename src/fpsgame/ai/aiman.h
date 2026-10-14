@@ -2,6 +2,11 @@
 namespace aiman
 {
     bool dorefresh = false;
+
+    // set by scheduleresetai(), consumed by doresetai() at a safe point in
+    // serverupdate() (after event processing): resetai() frees clientinfo
+    // objects, so it must never run while flushevents() holds one of them
+    bool resetaiPending = false;
     VARN(serverbotlimit, botlimit, 0, 8, MAXBOTS);
     VARN(serverbotbalance, botbalance, 0, 1, 1);
 
@@ -241,6 +246,24 @@ namespace aiman
         loopv(skills) addai(skills[i], -1);
     }
 
+    void scheduleresetai()
+    {
+        // defer the reset: resetai() deletes clientinfo objects, which is
+        // unsafe while game events are being flushed (e.g. when a kill inside
+        // flushevents starts a new round). the reset runs on the next
+        // serverupdate() tick, after processevents() has finished
+        resetaiPending = true;
+    }
+
+    void doresetai()
+    {
+        if(resetaiPending)
+        {
+            resetaiPending = false;
+            resetai();
+        }
+    }
+
     void checkai()
     {
         if(!dorefresh) return;
@@ -292,6 +315,7 @@ namespace aiman
 
     void changemap()
     {
+        resetaiPending = false;
         dorefresh = true;
         loopv(clients) if(clients[i]->local || clients[i]->privilege >= PRIV_MASTER) return;
         if(!botbalance) setbotbalance(NULL, true);

@@ -440,6 +440,7 @@ struct infectionclientmode : clientmode, ::ai::bot::BotGameMode
     bool aipursue(fpsent *d, ai::bot::aistate &b)
     {
         fpsent *e = getclient(b.target);
+        if(!e) return false;
         if (d->isInfected() && !e->isInfected() && e->state == CS_ALIVE)
         {
             return ai::bot::defend(d, b, e->o, 5, 5, 2);

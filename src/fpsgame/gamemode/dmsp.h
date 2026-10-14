@@ -72,6 +72,7 @@ struct dmspclientmode : clientmode, ::ai::bot::BotGameMode
     bool aipursue(fpsent *d, ai::bot::aistate &b)
     {
         fpsent *e = getclient(b.target);
+        if(!e) return false;
         if (d->isInfected() && !e->isInfected() && e->state == CS_ALIVE)
         {
             return ai::bot::defend(d, b, e->o, 5, 5, 2);
@@ -124,7 +125,9 @@ struct dmspservmode : servmode
 
         sendRoundInfo();
 
-        aiman::resetai();
+        // deferred: startRound can be entered from inside event processing
+        // (see scheduleresetai), where freeing AI clientinfo is unsafe
+        aiman::scheduleresetai();
 
         loopv(clients)
         {
@@ -206,6 +209,16 @@ struct dmspservmode : servmode
         level = 1;
         round = 0;
         if(!empty) startRound();
+    }
+
+    void setup()
+    {
+        // start round 1 when the match begins: previously the round machine
+        // only ever advanced on the first death (see died/checkRound), so a
+        // fresh match never spawned any monsters
+        reset(true);
+        round++;
+        startRound();
     }
 
     bool died(clientinfo *victim, clientinfo *actor)
