@@ -74,6 +74,11 @@ jobs:
           cmake -S enet-1.3.18 -B enet-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/mingw64
           cmake --build enet-build -j$(nproc)
           cmake --install enet-build
+          # enet's CMake install puts the archive in lib/static, but the
+          # pkg-config link line only searches lib, so copy it into place.
+          if [ -f /mingw64/lib/static/libenet.a ] && [ ! -f /mingw64/lib/libenet.a ]; then
+            cp /mingw64/lib/static/libenet.a /mingw64/lib/libenet.a
+          fi
           # The project finds enet via pkg-config; write the .pc if upstream didn't.
           if [ ! -f /mingw64/lib/pkgconfig/libenet.pc ]; then
             mkdir -p /mingw64/lib/pkgconfig
