@@ -1215,6 +1215,12 @@ bool menukey(int code, bool isdown, int cooked)
         return true;
     }
 
+    if(code==-6) // SDL_TEXTINPUT character, not a mouse button: feed the field being edited, otherwise let the console have it
+    {
+        if(e && fieldmode!=FIELDSHOW) { if(isdown) e->key(code, cooked); return true; }
+        return false;
+    }
+
     if(code==-1 && g3d_windowhit(isdown, true)) return true;
     else if(code==-3 && g3d_windowhit(isdown, false)) return true;
 

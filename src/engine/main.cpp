@@ -939,8 +939,8 @@ void checkinput()
                     else if((c & 0xE0) == 0xC0) { uni = ((c & 0x1F) << 6) | (t[1] & 0x3F); t += 2; }
                     else if((c & 0xF0) == 0xE0) { uni = ((c & 0x0F) << 12) | ((t[1] & 0x3F) << 6) | (t[2] & 0x3F); t += 3; }
                     else { t += 1; continue; }
-                    keypress(-1, true, uni2cube(uni));
-                    keypress(-1, false, 0);
+                    keypress(-6, true, uni2cube(uni));
+                    keypress(-6, false, 0);
                 }
                 break;
             }
