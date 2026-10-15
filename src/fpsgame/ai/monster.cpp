@@ -319,6 +319,11 @@ namespace ai
                         {
                             d->jumping = true;
                         }
+                        else if(!ai->wproute.empty())
+                        {
+                            // following a waypoint route: the blocker is usually a step or lip the graph crosses, so hop again rather than spinning off course
+                            if(!rnd(3)) d->jumping = true;
+                        }
                         else if(ai->trigger < lastmillis && (ai->monsterstate != M_HOME || !rnd(5)))  // search for a way around (common)
                         {
                             ai->targetyaw += 90+rnd(180);                                        // patented "random walk" AI pathfinding (tm) ;)
@@ -370,16 +375,51 @@ namespace ai
                             break;
 
                         case M_HOME:                        // monster has visual contact, heads straight for player and may want to shoot at any time
-                            ai->targetyaw = enemyyaw;
+                        {
+                            // Level 2 waypoint routing: with no line of sight to the enemy, steer along the
+                            // waypoint graph instead of beelining into the wall between monster and player.
+                            bool routed = false;
+                            if(!ai->wproute.empty())
+                            {
+                                int node = ai->wproute.last();
+                                if(iswaypoint(node))
+                                {
+                                    if(d->o.squaredist(waypoints[node].o) < (WAYPOINTRADIUS*1.5f)*(WAYPOINTRADIUS*1.5f))
+                                    {
+                                        ai->wproute.pop();          // reached this node, aim for the next one
+                                        routed = !ai->wproute.empty();
+                                    }
+                                    else routed = true;
+                                    if(routed)
+                                    {
+                                        node = ai->wproute.last();
+                                        ai->targetyaw = -atan2(waypoints[node].o.x - d->o.x, waypoints[node].o.y - d->o.y)/RAD;
+                                    }
+                                }
+                                else ai->wproute.setsize(0);
+                            }
+                            if(!routed) ai->targetyaw = enemyyaw;
                             if(ai->trigger < lastmillis)
                             {
                                 vec target;
-                                if(!raycubelos(d->o, ai->enemy->o, target))    // no visual contact anymore, let monster get as close as possible then search for player
+                                if(!raycubelos(d->o, ai->enemy->o, target))    // no visual contact anymore, route through the waypoint graph and keep homing
                                 {
+                                    if(lastmillis-ai->lastrouteplan >= 1000)    // replan at most once a second per monster
+                                    {
+                                        ai->lastrouteplan = lastmillis;
+                                        int from = closestwaypoint(d->o, SIGHTMAX, true);
+                                        int goal = closestwaypoint(ai->enemy->o, SIGHTMAX, true);
+                                        if(iswaypoint(from) && iswaypoint(goal) && from != goal)
+                                        {
+                                            if(!route(d, from, goal, ai->wproute, obstacles)) ai->wproute.setsize(0);
+                                        }
+                                        else ai->wproute.setsize(0);    // no graph coverage here: classic beeline/search behaviour below
+                                    }
                                     ai->transition(d, M_HOME, 1, 800, 500);
                                 }
                                 else 
                                 {
+                                    ai->wproute.setsize(0);
                                     bool melee = false, longrange = false;
                                     switch(d->gunselect)
                                     {
@@ -400,7 +440,8 @@ namespace ai
                                     }
                                 }
                             }
-                            break;
+                        }
+                        break;
                     }
                 }
 #if 1

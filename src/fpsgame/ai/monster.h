@@ -13,13 +13,15 @@ namespace ai
             int trigger;                        // millis at which transition to another monsterstate takes place
             vec attacktarget;                   // delayed attacks
             int anger;                          // how many times already hit by fellow monster
+            vector<int> wproute;                // waypoint route toward the enemy, consumed from the back (Level 2)
+            int lastrouteplan;                  // lastmillis when a waypoint route was last (re)planned
             physent *stacked;
             vec stackpos;
             bool counts;                        // does count for guts
             int lastshot;
 
             MonsterAiInfo() :   monsterstate(M_SEARCH), tag(-1), enemy(NULL), targetyaw(0), trigger(0), attacktarget(0, 0, 0),
-                                anger(0), stacked(NULL), stackpos(0, 0, 0), counts(true), lastshot(0)
+                                anger(0), lastrouteplan(0), stacked(NULL), stackpos(0, 0, 0), counts(true), lastshot(0)
             {}
 
             // monster AI is sequenced using transitions: they are in a particular state where
