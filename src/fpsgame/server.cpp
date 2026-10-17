@@ -13,8 +13,8 @@ namespace game
     SVAR(demodir, "demos");
 #endif
 
-    const char *buyablesnames[BA_NUM] = { "ammo", "dammo", "health", "dhealth", "garmour", "yarmour", "quad", "dquad", "support", "dsupport" };
-    const int buyablesprices[BA_NUM] = { 500, 900, 500, 900, 600, 1000, 1000, 1800, 2000, 3600 };
+    const char *buyablesnames[BA_NUM] = { "ammo", "dammo", "health", "dhealth", "garmour", "yarmour", "quad", "dquad", "support", "dsupport", "damage", "extralife", "rquad" };
+    const int buyablesprices[BA_NUM] = { 500, 900, 500, 900, 600, 1000, 1000, 1800, 2000, 3600, 600, 4000, 1500 };
 
 #ifdef CLIENT
     void parseoptions(vector<const char *> &args)
@@ -264,6 +264,12 @@ namespace server
         vector<clientinfo *> bots;
         ustring authrandom;
         int ping, aireinit;
+        // survival shop / death-rule state (dmsp): dmgmult is a percent (100 = base),
+        // dmglevel counts damage upgrades, extralives are banked extra lives,
+        // pendingquad arms quad at next round start,
+        // deadout marks a human as out for the current round (death rule)
+        int dmgmult, dmglevel, extralives, pendingquad;
+        bool deadout;
         string clientmap;
         int mapcrc; 
         bool warned, gameclip;
@@ -333,6 +339,11 @@ namespace server
             lastevent = 0;
             exceeded = 0;
             pushed = 0;
+            dmgmult = 100;
+            dmglevel = 0;
+            extralives = 0;
+            pendingquad = 0;
+            deadout = false;
             clientmap[0] = '\0';
             mapcrc = 0;
             warned = false;
@@ -1591,7 +1602,7 @@ namespace server
             N_PONG, N_RESUME, N_BASESCORE, N_BASEINFO, N_BASEREGEN, N_ANNOUNCE,
             N_SENDDEMOLIST, N_SENDDEMO, N_DEMOPLAYBACK, N_SENDMAP, N_DROPFLAG, N_SCOREFLAG, N_RETURNFLAG,
             N_RESETFLAG, N_INVISFLAG, N_CLIENT, N_AUTH_SERVER_HELLO, N_SERVER_AUTH, N_INITAI, N_SETONFIRE,
-            N_SURVINIT, N_SURVREASSIGN, N_SURVSPAWNSTATE, N_SURVNEWROUND, N_GUTS };
+            N_SURVINIT, N_SURVREASSIGN, N_SURVSPAWNSTATE, N_SURVNEWROUND, N_GUTS, N_SHOPOPEN };
         if(ci)
         {
             loopi(sizeof(servtypes)/sizeof(int)) if(type == servtypes[i]) return -1;
@@ -2243,6 +2254,9 @@ namespace server
 
     void dodamage(clientinfo *target, clientinfo *actor, int damage, int gun, const vec &hitpush, bool special)
     {
+        // survival damage upgrade: bought damage levels scale a human's outgoing damage (dmsp only)
+        if(actor && actor!=target && m_dmsp && actor->state.ai.type==ai::AI_TYPE_NONE && actor->dmgmult > 100)
+            damage = damage*actor->dmgmult/100;
         gamestate &ts = target->state;
         ts.dodamage(damage);
         if (damage>0 && target!=actor && !isteam(target->team, actor->team)) actor->state.damage += damage;
@@ -3948,10 +3962,16 @@ namespace server
             {
                 int item = getint(p);
 
-                if(ci->state.state == CS_ALIVE && item >= 0 && item < game::BA_NUM)
+                // survival shop: buying is allowed while alive, or while the dmsp intermission shop is open
+                bool canshop = ci->state.state == CS_ALIVE || (m_dmsp && dmspmode.shopopen);
+                if(canshop && item >= 0 && item < game::BA_NUM)
                 {
-                    int guts = game::buyablesprices[item];
-                    if (ci->state.guts>=guts)
+                    // damage upgrade has a scaling price per level; the table holds the level-1 price
+                    int guts = (item==game::BA_DAMAGE) ? 600*(ci->dmglevel+1) : game::buyablesprices[item];
+                    bool denied = false;
+                    if(item==game::BA_DAMAGE && ci->dmglevel >= 10) { sendservmsgf(ci->clientnum, "\f2damage upgrade maxed out"); denied = true; }
+                    if(item==game::BA_EXTRALIFE && ci->extralives >= 3) { sendservmsgf(ci->clientnum, "\f2no more extra lives can be banked"); denied = true; }
+                    if(!denied && ci->state.guts>=guts)
                     {
                         gamestate &gs = ci->state;
                         gs.guts -= guts;
@@ -3995,12 +4015,36 @@ namespace server
                             case game::BA_SUPPORTD:
                                 //spawnsupport((item==game::BA_SUPPORTD)? 6: 3);
                                 break;
+
+                            case game::BA_DAMAGE:
+                                ci->dmglevel++;
+                                ci->dmgmult = 100 + 10*ci->dmglevel; // +10% outgoing damage per level
+                                sendservmsgf(ci->clientnum, "\f2damage upgraded to %d%%", ci->dmgmult);
+                                break;
+
+                            case game::BA_EXTRALIFE:
+                                ci->extralives++;
+                                sendservmsgf(ci->clientnum, "\f2extra life banked (%d total) - death will consume one instead of ending your run", ci->extralives);
+                                break;
+
+                            case game::BA_QUADR:
+                                // banked: quadmillis is armed at the NEXT round start so none is wasted in the shop
+                                ci->pendingquad++;
+                                sendservmsgf(ci->clientnum, "\f2quad damage armed for next round (%d banked)", ci->pendingquad);
+                                break;
                             default:
                                 DEBUG_ERROR("Invalid buyable: %i from %i", item, ci->clientnum);
                                 break;
                         }
 
-                        sendf(-1, 1, "ri4", N_BUY, ci->clientnum, item, guts);
+                        if(item==game::BA_QUADR)
+                        {
+                            // banked quad: do NOT broadcast N_BUY now (that would start the
+                            // quad timer during the shop). Just sync guts; the quad is armed
+                            // by a price-0 N_BUY at the next round start.
+                            sendf(ci->ownernum, 1, "ri3", N_GUTS, ci->clientnum, ci->state.guts);
+                        }
+                        else sendf(-1, 1, "ri4", N_BUY, ci->clientnum, item, guts);
                     }
                 }
                 break;

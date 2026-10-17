@@ -437,6 +437,17 @@ namespace game
             case BA_SUPPORTD:
                 iname = (item==BA_SUPPORTD)? "$ Double Support $": "$ Support $";
                 break;
+
+            case BA_DAMAGE:
+                iname = "$ Damage +10% $";
+                break;
+            case BA_EXTRALIFE:
+                iname = "$ Extra Life banked $";
+                break;
+            case BA_QUADR:
+                iname = "$ Quad armed for next round $";
+                d->quadmillis = 30000;
+                break;
         }
 
         if(!iname) iname = "$ <INVALID> $";
@@ -486,9 +497,24 @@ namespace game
         }
     }
 
+    int shopend = 0; // client millis when the intermission shop closes (0 = closed)
+
+    bool shopopen() { return shopend && lastmillis < shopend; }
+
+    // called by the N_SHOPOPEN server message: the buy menu opens automatically
+    void openshop(int millis)
+    {
+        shopend = lastmillis + millis;
+        showgui("buy");
+        conoutf(CON_GAMEINFO, "\f2Shop open! Spend your guts - press B or click a button.");
+    }
+
+    // cubescript getter so the buy menu can show the live guts balance
+    ICOMMAND(getguts, "", (), intret(player1->guts));
+
     void buy(char *s)
     {
-        if (player1->state != CS_ALIVE || intermission) return;
+        if ((player1->state != CS_ALIVE && !shopopen()) || intermission) return;
 
         loopi(BA_NUM) if (!strcmp(buyablesnames[i], s))
         {
@@ -733,6 +759,7 @@ namespace game
         gets2c();
         updatemovables(curtime);
         if (cmode) cmode->update(curtime);
+        if(shopend && lastmillis >= shopend) { shopend = 0; cleargui(); }
         if(intermission)
         {
             currentCutscene = 0;
@@ -1811,6 +1838,11 @@ namespace game
             if(d->quadmillis) drawicon(HICON_QUAD, 80, 1200);
             if(ammohud) drawammohud(d, w, h);
             if(cmode && cmode->getRound() > 0) drawroundicon(w,h);
+            if(shopopen())
+            {
+                defformatstring(shoptext)("SHOP: %ds", (shopend-lastmillis+999)/1000);
+                draw_text(shoptext, w*1800/h - 262, 150, 255, 220, 80);
+            }
             if(!d->isInfected()) drawcrosshairhud(d, w, h);
 
             if (!m_insta)

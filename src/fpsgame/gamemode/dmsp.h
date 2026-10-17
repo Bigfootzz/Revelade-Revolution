@@ -85,8 +85,11 @@ struct dmspclientmode : clientmode, ::ai::bot::BotGameMode
     }
 };
 #else
+void startintermission(); // defined later in server.cpp (game-over trigger)
+
 struct dmspservmode : servmode
 {
+
     /**
      * Maximum amount of monsters that are remaining when the round countdown is started.
      */
@@ -98,14 +101,25 @@ struct dmspservmode : servmode
     static const int REMAIN_COUNTDOWN_TIME  = 150 * 1000;
 
     /**
+     * Seconds the intermission shop stays open between rounds.
+     * Fixed timer on purpose: no ready-up, so an idle or disconnected player
+     * can never deadlock the server or hold up the other players.
+     */
+    static const int SHOP_SECS = 25;
+
+    /**
      * Level: difficulty (1 <= x <= 4)
      * spawnLeft: how many monsters left to spawn
      * monsterTotal: total amount of monsters in this round
      * remain: amount of monsters left to be killed
      * nextMonster: time when we should spawn the next monster
      * roundTime: time when the coundown started or 0
+     * shopopen: intermission shop is open (no fighting, buying allowed)
+     * shopend: server millis when the shop closes and the next round starts
      */
     int level, round, spawnLeft, monsterTotal, remain, nextMonster, roundTime;
+    bool shopopen;
+    int shopend;
 
     dmspservmode()
     {
@@ -120,6 +134,7 @@ struct dmspservmode : servmode
     void startRound()
     {
         roundTime = 0;
+        shopopen = false;
         nextMonster = 0;//lastmillis+10000+ (round * 1000);
         remain = monsterTotal = spawnLeft = ((level)*3) + (((round-1)*(level*2)) + int(round*round));
 
@@ -134,8 +149,19 @@ struct dmspservmode : servmode
             // Clear all corpses
             if(clients[i]->state.ai.type != ai::AI_TYPE_MONSTER)
             {
+                // Job 1: everyone is back in for the new round
+                clients[i]->deadout = false;
                 if(clients[i]->state.isInfected()) makeInfected(clients[i], -1);
                 if(clients[i]->state.state == CS_DEAD) instantRespawn(clients[i]);
+                // Job 3: a banked quad arms NOW, at round start, so none of its
+                // duration is wasted in the shop. N_BUY with price 0 reuses the
+                // existing client sync path (applyitem sets quadmillis locally).
+                if(clients[i]->state.ai.type == ai::AI_TYPE_NONE && clients[i]->pendingquad > 0)
+                {
+                    clients[i]->pendingquad--;
+                    clients[i]->state.quadmillis = 30000;
+                    sendf(-1, 1, "ri4", N_BUY, clients[i]->clientnum, game::BA_QUADR, 0);
+                }
             }
         }
     }
@@ -143,9 +169,20 @@ struct dmspservmode : servmode
     void nextRound(bool clear = false)
     {
         round++;
+        shopopen = false;
         sendservmsgf("\f2Round%s clear!", (clear)? "": " not");
         //TODO playsound(S_V_BASECAP);
         startRound();
+    }
+
+    // Job 3: intermission between rounds — fighting pauses and the buy menu opens.
+    void startShop()
+    {
+        shopopen = true;
+        shopend = lastmillis + SHOP_SECS*1000;
+        sendservmsgf(-1, "\f2Round %d clear! Shop open for %d seconds - press B to buy.", round, SHOP_SECS);
+        sendf(-1, 1, "ri2", N_SHOPOPEN, SHOP_SECS*1000);
+        sendRoundInfo();
     }
 
     bool checkRound(clientinfo *exclude = NULL)
@@ -162,7 +199,7 @@ struct dmspservmode : servmode
 
         if(monstersLeft <= 0 /*|| humansLeft <= 0*/)
         {
-            nextRound(humansLeft > 0);
+            startShop();
             return true;
         }
 
@@ -185,6 +222,13 @@ struct dmspservmode : servmode
 
     void update()
     {
+        if(interm) return; // match is over (game over): freeze the round machine
+        if(shopopen)
+        {
+            // fixed timer only: the next round starts when the shop closes, no waiting on players
+            if(lastmillis >= shopend) nextRound();
+            return;
+        }
         if(spawnLeft && lastmillis>nextMonster)
         {
             if(monsterTotal==spawnLeft)
@@ -208,6 +252,8 @@ struct dmspservmode : servmode
     {
         level = 1;
         round = 0;
+        shopopen = false;
+        shopend = 0;
         if(!empty) startRound();
     }
 
@@ -221,33 +267,53 @@ struct dmspservmode : servmode
         startRound();
     }
 
+    // Job 1: a dead player cannot respawn until the next round (unless an
+    // extra life is consumed). The client asks to respawn via N_TRYSPAWN,
+    // which is gated here; instantRespawn (round start / extra life) bypasses it.
+    bool canspawn(clientinfo *ci, bool connecting = false)
+    {
+        if(!connecting && ci->state.ai.type == ai::AI_TYPE_NONE && ci->deadout) return false;
+        return true;
+    }
+
     bool died(clientinfo *victim, clientinfo *actor)
     {
-        bool wantRespawn = false;
-
-        if(!victim->state.isInfected())
+        // AI monster killed: count down the round
+        if(victim->state.ai.type == ai::AI_TYPE_MONSTER)
         {
-            if(monster::shouldSpawnRat())
-            {
-                makeInfected(victim, ::monster::getRandomTypeWithTrait(::monster::MONSTER_TYPE_TRAIT_RAT));
-                wantRespawn = true;
-            }
-        }
-        else
-        {
-            if(victim->state.ai.type == ai::AI_TYPE_MONSTER)
-            {
-                remain--;
-                sendRoundInfo();
-            }
-            else makeInfected(victim, -1);
+            remain--;
+            sendRoundInfo();
+            checkRound(victim);
+            return false;
         }
 
-        if(!checkRound(victim) && wantRespawn)
+        // ---- human (or bot) victim ----
+        // Job 2: the old code turned a dead HUMAN into a rat 1/8 of the time
+        // (makeInfected as MONSTER_TYPE_TRAIT_RAT via shouldSpawnRat).
+        // Removed: a dead player never comes back as a rat.
+
+        // Job 3: a banked extra life is consumed instead of dying out
+        if(victim->extralives > 0)
         {
+            victim->extralives--;
+            if(victim->state.isInfected()) makeInfected(victim, -1);
+            victim->deadout = false;
+            sendservmsgf(victim->clientnum, "\f2Extra life used! %d banked.", victim->extralives);
             instantRespawn(victim);
             return true;
         }
+
+        // Job 1: death ends your round — you are out until the next round
+        victim->deadout = true;
+        sendservmsgf(victim->clientnum, "\f2You are out for this round.");
+
+        // Job 1: game over when every human player is out
+        // (single player: your death ends the match). Bots do not count:
+        // your death ends the run even if your bots are still standing.
+        bool anyonein = false;
+        loopv(clients)
+            if(clients[i]->state.ai.type == ai::AI_TYPE_NONE && !clients[i]->deadout) { anyonein = true; break; }
+        if(!anyonein) startintermission();
         return false;
     }
 };

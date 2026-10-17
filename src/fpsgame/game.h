@@ -671,7 +671,7 @@ enum
     N_INFECT, N_INITINF, N_RADIOTEAM, N_RADIOALL,
     N_ROUNDINFO,
     N_SURVINIT, N_SURVREASSIGN, N_SURVSPAWNSTATE, N_SURVNEWROUND, N_SURVROUNDOVER,
-    N_GUTS, N_BUY,
+    N_GUTS, N_BUY, N_SHOPOPEN,
     N_SERVER_COMMAND,
     N_DEMOPACKET,
     NUMSV
@@ -704,7 +704,7 @@ static const int msgsizes[] =               // size inclusive message token, 0 f
     N_ONFIRE, 0/*4*/, N_SETONFIRE, 0/*4*/,
     N_INFECT, 0, N_INITINF, 0, N_RADIOTEAM, 0, N_RADIOALL, 0,
     N_SURVINIT, 0, N_SURVREASSIGN, 0, N_SURVSPAWNSTATE, 0, N_SURVNEWROUND, 0, N_SURVROUNDOVER, 2,
-    N_GUTS, 3, N_BUY, 0, N_SERVER_COMMAND, 0,
+    N_GUTS, 3, N_BUY, 0, N_SHOPOPEN, 2, N_SERVER_COMMAND, 0,
     N_DEMOPACKET, 0,
     -1
 };
@@ -1238,11 +1238,17 @@ namespace game
         BA_QUADD,
         BA_SUPPORT,
         BA_SUPPORTD,
+        BA_DAMAGE,      // +10% damage per level, stackable (price scales)
+        BA_EXTRALIFE,   // banked extra life, consumed on death instead of game over
+        BA_QUADR,       // quad damage armed for the NEXT round start (nothing wasted in the shop)
         BA_NUM
     };
     extern const char *buyablesnames[];
     extern const int buyablesprices[];
     extern void applyeffect(fpsent *d, int item);
+    extern int shopend;
+    extern void openshop(int millis);
+    extern bool shopopen();
     extern void applyitem(fpsent *d, int item);
 
     // client

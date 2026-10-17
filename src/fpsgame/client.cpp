@@ -1778,6 +1778,13 @@ namespace game
                 break;
             }
 
+            case N_SHOPOPEN:
+            {
+                // intermission shop: open the buy menu automatically
+                game::openshop(getint(p));
+                break;
+            }
+
             #define PARSEMESSAGES 1
             #include "gamemode/capture.h"
             #include "gamemode/ctf.h"
