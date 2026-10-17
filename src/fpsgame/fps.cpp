@@ -956,7 +956,7 @@ namespace game
         if(!h) h = player1;
         if(special != -1)
         {
-            if(actor == h && d != h)
+            if(actor == h && d != h && d->ai.type != ai::AI_TYPE_MONSTER)
             {
                 hudevents.add(hudevent(special ? (WEAP_IS_EXPLOSIVE(gun) ? HET_DIRECTHIT : HET_HEADSHOT): HET_KILL, lastmillis));
             }
