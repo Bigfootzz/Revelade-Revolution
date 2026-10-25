@@ -243,6 +243,34 @@ namespace ai
             }
         }
 
+        // Plan a waypoint route from the monster to its enemy, throttled to
+        // once a second per monster. Returns true when a non-empty route is
+        // available afterwards (newly planned, or an existing route kept
+        // during the throttle window). Shared by the blocked handler and
+        // the M_HOME no-LOS branch so a blocked monster routes around the
+        // obstacle via the waypoint graph instead of random-walking.
+        // No-graph maps and unplannable cases clear the route, keeping the
+        // classic beeline/search behaviour as the fallback.
+        static bool planroute(fpsent *d, MonsterAiInfo *ai)
+        {
+            if(!ai->enemy) return false;
+            if(lastmillis - ai->lastrouteplan < 1000) return !ai->wproute.empty();
+            ai->lastrouteplan = lastmillis;
+            int from = closestwaypoint(d->o, SIGHTMAX, true);
+            int goal = closestwaypoint(ai->enemy->o, SIGHTMAX, true);
+            if(iswaypoint(from) && iswaypoint(goal) && from != goal)
+            {
+                if(route(d, from, goal, ai->wproute, obstacles))
+                {
+                    ai->lastroutepos = d->o;
+                    ai->lastroutetime = lastmillis;
+                    return true;
+                }
+            }
+            ai->wproute.setsize(0);
+            return false;
+        }
+
         void MonsterAi::think(fpsent *d, bool run)
         {
             MonsterAiInfo *ai = getMonsterState(d);
@@ -324,7 +352,14 @@ namespace ai
                             // following a waypoint route: the blocker is usually a step or lip the graph crosses, so hop again rather than spinning off course
                             if(!rnd(3)) d->jumping = true;
                         }
-                        else if(ai->trigger < lastmillis && (ai->monsterstate != M_HOME || !rnd(5)))  // search for a way around (common)
+                        else if(planroute(d, ai))
+                        {
+                            // blocked with no route: route around the obstacle via the
+                            // waypoint graph instead of spinning off course; the M_HOME
+                            // case below steers onto the route this same think
+                            ai->transition(d, M_HOME, 1, 800, 500);
+                        }
+                        else if(ai->trigger < lastmillis && (ai->monsterstate != M_HOME || !rnd(5)))  // search for a way around (common, only when no route could be planned)
                         {
                             ai->targetyaw += 90+rnd(180);                                        // patented "random walk" AI pathfinding (tm) ;)
                             ai->transition(d, M_SEARCH, 1, 100, 1000);
@@ -376,7 +411,7 @@ namespace ai
 
                         case M_HOME:                        // monster has visual contact, heads straight for player and may want to shoot at any time
                         {
-                            // Level 2 waypoint routing: with no line of sight to the enemy, steer along the
+                            // Waypoint routing: with no line of sight to the enemy, steer along the
                             // waypoint graph instead of beelining into the wall between monster and player.
                             bool routed = false;
                             if(!ai->wproute.empty())
@@ -394,6 +429,13 @@ namespace ai
                                     {
                                         node = ai->wproute.last();
                                         ai->targetyaw = -atan2(waypoints[node].o.x - d->o.x, waypoints[node].o.y - d->o.y)/RAD;
+                                        // Stuck on this route node: position has not changed
+                                        // in 2s while steering at it, so the link is not
+                                        // traversable from here. Skip the node rather than
+                                        // hopping at the wall forever; the next node (or a
+                                        // replan) may route around it.
+                                        if(d->o.dist(ai->lastroutepos) > 8) { ai->lastroutepos = d->o; ai->lastroutetime = lastmillis; }
+                                        else if(lastmillis - ai->lastroutetime > 2000) { ai->wproute.pop(); ai->lastroutepos = d->o; ai->lastroutetime = lastmillis; }
                                     }
                                 }
                                 else ai->wproute.setsize(0);
@@ -404,17 +446,7 @@ namespace ai
                                 vec target;
                                 if(!raycubelos(d->o, ai->enemy->o, target))    // no visual contact anymore, route through the waypoint graph and keep homing
                                 {
-                                    if(lastmillis-ai->lastrouteplan >= 1000)    // replan at most once a second per monster
-                                    {
-                                        ai->lastrouteplan = lastmillis;
-                                        int from = closestwaypoint(d->o, SIGHTMAX, true);
-                                        int goal = closestwaypoint(ai->enemy->o, SIGHTMAX, true);
-                                        if(iswaypoint(from) && iswaypoint(goal) && from != goal)
-                                        {
-                                            if(!route(d, from, goal, ai->wproute, obstacles)) ai->wproute.setsize(0);
-                                        }
-                                        else ai->wproute.setsize(0);    // no graph coverage here: classic beeline/search behaviour below
-                                    }
+                                    planroute(d, ai);    // throttled inside; keeps any existing route, clears on failure
                                     ai->transition(d, M_HOME, 1, 800, 500);
                                 }
                                 else 
