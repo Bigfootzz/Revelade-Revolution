@@ -472,7 +472,7 @@ namespace server
 
         int findmode(int mode) const
         {
-            if(!hasmode(mode)) RR_FOREACH_GAMEMODE if(hasmode(gameModes[i].id)) return i;
+            if(!hasmode(mode)) RR_FOREACH_GAMEMODE if(hasmode(gameModes[i].id)) return gameModes[i].id;
             return mode;
         }
 
@@ -2108,7 +2108,7 @@ namespace server
     {
         if(!maprotations.inrange(curmaprotation))
         {
-            changemap("", 1);
+            changemap(smapname[0] ? smapname : DEFAULT_MAP, gamemode);
             return;
         }
         if(next) 
